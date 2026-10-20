@@ -18,19 +18,9 @@ from huggingface_hub.errors import HfHubHTTPError
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from inspect_model import PICKLE_SUFFIXES, remote_code  # noqa: E402
 
-api = HfApi()
+from license_policy import BUCKETS, classify  # noqa: E402
 
-# Licenses a commercial review would normally wave through without escalation.
-PERMISSIVE = {
-    "apache-2.0",
-    "mit",
-    "bsd",
-    "bsd-2-clause",
-    "bsd-3-clause",
-    "cc0-1.0",
-    "unlicense",
-    "isc",
-}
+api = HfApi()
 
 
 def audit(summary):
@@ -70,7 +60,7 @@ def audit(summary):
             "remote_code": code,
             # Code in another repo: pinning this revision does not pin that code.
             "remote_code_external": [t for t in code if "--" in t],
-            "license_permissive": license_ in PERMISSIVE,
+            "license_bucket": classify(license_),
             "license_declared": license_ is not None,
         }
     )
@@ -124,11 +114,9 @@ def report(records, out):
     pickle_only = [r for r in ok if r["pickle_files"] and not r["safetensors_files"]]
     code = [r for r in ok if r["remote_code"]]
     external = [r for r in ok if r["remote_code_external"]]
-    undeclared = [r for r in ok if not r["license_declared"]]
-    non_permissive = [
-        r for r in ok if r["license_declared"] and not r["license_permissive"]
-    ]
     gated = [r for r in ok if r["gated"]]
+    by_bucket = {b: [r for r in ok if r["license_bucket"] == b] for b in BUCKETS}
+    undeclared = [r for r in ok if not r["license_declared"]]
 
     print()
     print("=" * 62)
@@ -139,8 +127,13 @@ def report(records, out):
     print(f"  execute remote code on load   {pct(code)}")
     print(f"    code from a DIFFERENT repo  {pct(external)}")
     print(f"  gated (token + accepted EULA) {pct(gated)}")
-    print(f"  no license declared           {pct(undeclared)}")
-    print(f"  licence not on permissive list{pct(non_permissive)}")
+    print()
+    print("  licence, by what a review would decide:")
+    print(f"    permissive      ship it    {pct(by_bucket['permissive'])}")
+    print(f"    conditional     obligations{pct(by_bucket['conditional'])}")
+    print(f"    non-commercial  blocked    {pct(by_bucket['non_commercial'])}")
+    print(f"    unclearable     read it    {pct(by_bucket['unclearable'])}")
+    print(f"      of which, no tag at all  {pct(undeclared)}")
     print()
     print(f"  wrote {out}")
 

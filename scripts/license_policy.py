@@ -89,8 +89,35 @@ BUCKETS = (
 )
 
 
+# Most-restrictive-first, for resolving multi-licence declarations. Ordered by
+# how much it blocks an automated gate: cannot ship > needs a human > ship with
+# obligations > ship.
+SEVERITY = (
+    NON_COMMERCIAL_BUCKET,
+    UNCLEARABLE_BUCKET,
+    CONDITIONAL_BUCKET,
+    PERMISSIVE_BUCKET,
+)
+
+
 def classify(license_tag):
-    """Return one of BUCKETS for a Hub licence tag."""
+    """Return one of BUCKETS for a Hub licence tag.
+
+    A card may declare several licences (`license: [apache-2.0, other]`). That
+    is ambiguous: it can mean "take your pick" or "different parts, different
+    terms", and the tag does not say which. We resolve to the most restrictive
+    bucket present, because assuming the generous reading is how an automated
+    gate ends up shipping something it shouldn't.
+    """
+    if isinstance(license_tag, (list, tuple, set)):
+        if not license_tag:
+            return UNCLEARABLE_BUCKET
+        buckets = {classify(tag) for tag in license_tag}
+        return next(b for b in SEVERITY if b in buckets)
+
+    if not isinstance(license_tag, str):
+        return UNCLEARABLE_BUCKET
+
     if license_tag in UNCLEARABLE:
         return UNCLEARABLE_BUCKET
 

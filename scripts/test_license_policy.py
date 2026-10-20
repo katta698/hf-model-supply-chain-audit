@@ -31,6 +31,14 @@ CASES = [
         "unclearable",
         "unrecognised tag must NOT fail open to permissive",
     ),
+    # Cards may declare several licences; resolve to the most restrictive.
+    (["apache-2.0", "mit"], "permissive", "all permissive stays permissive"),
+    (["apache-2.0", "other"], "unclearable", "one undecidable entry blocks it"),
+    (["apache-2.0", "cc-by-nc-4.0"], "non_commercial", "NC wins over permissive"),
+    (["llama3.1", "cc-by-nc-4.0"], "non_commercial", "NC wins over conditional"),
+    (["apache-2.0", "gpl-3.0"], "conditional", "obligations win over permissive"),
+    ([], "unclearable", "empty list decides nothing"),
+    (123, "unclearable", "non-string, non-list input must not crash"),
 ]
 
 

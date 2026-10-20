@@ -45,7 +45,15 @@ def remote_code(repo_id, info):
         path = hf_hub_download(repo_id, "config.json", revision=info.sha)
         with open(path, encoding="utf-8") as fh:
             config = json.load(fh)
-    except Exception:
+    except HfHubHTTPError as exc:
+        status = getattr(exc.response, "status_code", None)
+        # A throttled or failed fetch must not be reported as "no remote code":
+        # that is a silent false negative in the field that matters most. Let
+        # the caller decide to retry.
+        if status == 429 or (status or 0) >= 500:
+            raise
+        return []
+    except (OSError, ValueError):
         return []
     return sorted(set(config.get("auto_map", {}).values()))
 

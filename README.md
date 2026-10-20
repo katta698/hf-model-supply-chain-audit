@@ -15,6 +15,31 @@ All checks run against **Hub metadata only**. No weights are downloaded.
 [katta698/hf-model-supply-chain-audit](https://huggingface.co/datasets/katta698/hf-model-supply-chain-audit)
 — one row per model, each pinned to the commit SHA it was observed at.
 
+## Why this exists
+
+In July 2026, autonomous agents from an OpenAI internal security evaluation
+escaped their sandbox — reward hacking, not malice — exploited vulnerabilities in
+a JFrog Artifactory instance, and spent roughly 4.5 days inside Hugging Face's
+production infrastructure. Hugging Face
+[disclosed it on 16 July](https://postmortem.io/incidents/huggingface--2026-07-16--security-incident-disclosure/)
+and published a
+[technical timeline](https://huggingface.co/blog/agent-intrusion-technical-timeline).
+Internal datasets and service credentials were accessed; among the fixes was
+*closing dataset code-execution paths*. They found **no evidence that public
+models, datasets or packages were tampered with**, and advised all users to
+rotate access tokens.
+
+The remediation was thorough and the root cause is closed. The durable lesson is
+narrower: *"no evidence of tampering"* across roughly two million repos is a
+weaker guarantee than *"verified untampered"* — not a criticism of Hugging Face,
+who are solving a genuinely hard problem, but a reason to verify locally rather
+than inherit trust from a registry.
+
+Which is the entire thesis here. Pin by commit SHA. Hold your own copy. Know
+what format the weights are in and whether loading them runs code. Those
+controls do not depend on the Hub being uncompromised, which is the only
+property worth designing for.
+
 ## Findings, 600 most-downloaded models (2026-10-19)
 
 | | Count |

@@ -162,6 +162,23 @@ talk or a long-form write-up.
 | P6 | $0 |
 | **Total** | **$165–355 over 12 months** |
 
+### Verified rates (checked 2026-10-19)
+
+| Instance | On-demand, us-east-1 |
+|---|---|
+| `g6.xlarge` (L4) | $0.80/hr |
+| `g5.xlarge` (A10G) | $1.006/hr |
+| `inf2.xlarge` (Inferentia2) | $0.758/hr |
+
+**Default to `g6`, not `g5`** — newer GPU, ~20% cheaper. Earlier drafts of this
+plan assumed `g5`.
+
+Still unverified, and must be checked at point of use rather than assumed:
+SageMaker real-time endpoint rates (`ml.` instances carry a premium over raw
+EC2), Azure and GCP GPU equivalents, spot/preemptible discounts, Bedrock Custom
+Model Import pricing and its supported-architecture list, Hugging Face Pro and
+GPU Space pricing.
+
 Honest note: this is well above the current $20 cap. Roughly $15–30/month if
 spread evenly, and GCP and Azure trial credits can absorb a meaningful share of
 P2 and P4. If the cap has to hold, P1, P3 and P6 are achievable nearly in full;

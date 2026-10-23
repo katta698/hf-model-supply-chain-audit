@@ -61,12 +61,42 @@ headline risk and right for a different one:
 | licence unclearable | 14.0% | 17.8% | 1.3× |
 | no licence tag | 6.0% | 6.6% | 1.1× |
 
-**Pickle risk is concentrated at the top of the Hub, not the tail.** The likely
-explanation is age rather than popularity — the most-downloaded list is full of
-pre-safetensors models — which is the next thing to measure.
+**Pickle risk is concentrated at the top of the Hub, not the tail.**
 
 **Remote code execution is 3× more common outside the top 100**, and that is the
 higher-severity finding of the two.
+
+### Age explains the first result — and exposes a second one
+
+Pickle-only weights by the year the repo was created, and remote code for the
+same cohorts (`scripts/analyze_age.py`):
+
+| Repo created | n | pickle-only | remote code |
+|---|---|---|---|
+| 2022 | 138 | **40.6%** | 0.0% |
+| 2023 | 76 | 23.7% | 1.3% |
+| 2024 | 91 | 8.8% | **13.2%** |
+| 2025 | 101 | 3.0% | 8.9% |
+| 2026 | 194 | **0.5%** | 4.6% |
+
+An 80× decline in pickle-only weights. Safetensors shipped in late 2022 and the
+ecosystem adopted it — **the weight-format problem is largely resolving
+itself.** "Popularity" was mostly standing in for age; the top 100 skews older
+(28% pre-2023 vs 22% in the tail). Holding creation year fixed, the rank gap
+becomes inconsistent at n=15–28 per cell, so age dominates and any residual
+popularity effect cannot be resolved at this sample size.
+
+Remote code runs the other way. It did not exist in 2022, appeared in 2023,
+peaked in 2024, and is now declining — and unlike pickle, its rank effect
+*survives* the age control (among 2024 repos: 14.7% in the tail vs 6.2% in the
+top 100).
+
+**The ecosystem fixed the weight-format problem and introduced a different one
+in its place.** A scanner that checks only for pickle today would declare
+victory on a receding risk while missing the one that replaced it.
+
+`created_at` is repo creation, not last modification, so this measures era of
+origin rather than era of current contents.
 
 ### Pinning a revision does not always pin the code that runs
 

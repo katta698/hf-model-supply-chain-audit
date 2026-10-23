@@ -85,13 +85,63 @@ is **wrong for the headline risk**:
 | no licence tag | 6.0% | 6.6% | 1.1× |
 
 **Pickle risk is concentrated at the top of the Hub, not the tail.** The most
-popular models are *more* likely to leave you no safe option. The likely
-explanation is age rather than popularity — the most-downloaded list is full of
-pre-safetensors models like BERT, CLIP and wav2vec2 — which is the next thing to
-measure, and is not measured here.
+popular models are *more* likely to leave you no safe option.
 
 **Remote code execution is 3× more common outside the top 100**, and it is the
 higher-severity of the two risks.
+
+The obvious explanation for the first result is age rather than popularity — the
+most-downloaded list is full of pre-safetensors models like BERT, CLIP and
+wav2vec2. That is measured below, and it leads somewhere more interesting than
+the original finding.
+
+## Age, not popularity — and a risk that replaced the one everyone watches
+
+Pickle-only weights, by the year the repo was created:
+
+| Repo created | n | pickle-only |
+|---|---|---|
+| 2022 | 138 | **40.6%** |
+| 2023 | 76 | 23.7% |
+| 2024 | 91 | 8.8% |
+| 2025 | 101 | 3.0% |
+| 2026 | 194 | **0.5%** |
+
+An 80× decline. Safetensors shipped in late 2022 and the ecosystem genuinely
+adopted it. **The weight-format problem is largely resolving itself.**
+
+So "popularity" was mostly standing in for age: the top 100 skews older (28%
+created before 2023, against 22% in the tail). Holding creation year fixed, the
+rank gap becomes inconsistent and the per-cell counts fall to n=15–28, which is
+too small to settle. The honest conclusion is that **age dominates, and any
+residual popularity effect cannot be resolved at this sample size.**
+
+Remote code runs the opposite way:
+
+| Repo created | n | executes remote code |
+|---|---|---|
+| 2022 | 138 | 0.0% |
+| 2023 | 76 | 1.3% |
+| 2024 | 91 | **13.2%** |
+| 2025 | 101 | 8.9% |
+| 2026 | 194 | 4.6% |
+
+It did not exist in 2022. It appeared in 2023, peaked in 2024, and is now
+declining. Unlike pickle, its rank effect *survives* the age control — among
+2024 repos the tail ran 14.7% against the top 100's 6.2%; among 2025 repos,
+11.0% against 0.0%.
+
+**The ecosystem fixed the weight-format problem and introduced a different one
+in its place.** `trust_remote_code` arrived *after* safetensors solved the risk
+everyone was watching. A scanner that checks only for pickle today would declare
+victory on a receding risk while missing the one that replaced it.
+
+Caveat: `created_at` is when the repo was created, not when its files were last
+modified. An old repo that later added safetensors is not counted as
+pickle-only. This measures era of origin, not era of current contents — good
+enough for the trend, not a precise instrument.
+
+Reproduce with `scripts/analyze_age.py`.
 
 A note on reading these numbers: a six-band breakdown by rank appeared to show
 licence clarity degrading steadily with popularity, reaching 28% unclearable at
@@ -179,6 +229,7 @@ All three produced confident, wrong output in earlier runs.
 | `downloads` | Hub-reported monthly downloads at snapshot |
 | `status` | `ok`, or `error:<code>` |
 | `revision` | commit SHA the row was observed at |
+| `created_at` | ISO timestamp the repo was created (not last modified) |
 | `gated` | `false`, `"auto"` or `"manual"` |
 | `license` | raw Hub licence tag (`null` if absent, list if several) |
 | `license_bucket` | `permissive` / `conditional` / `non_commercial` / `unclearable` |

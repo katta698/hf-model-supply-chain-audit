@@ -80,6 +80,9 @@ def audit(summary, rank):
     record.update(
         {
             "revision": info.sha,
+            # Safetensors landed in late 2022 and became the default during
+            # 2023, so repo age is the obvious confounder for pickle risk.
+            "created_at": info.created_at.isoformat() if info.created_at else None,
             # False | "auto" | "manual". Metadata stays readable when gated;
             # only file downloads require an accepted licence + token.
             "gated": info.gated or False,
@@ -108,8 +111,10 @@ def load_existing(out):
             if not line:
                 continue
             record = json.loads(line)
-            # Only completed audits count; errored rows get retried.
-            if record.get("status") == "ok":
+            # Only completed audits count; errored rows get retried. Rows
+            # missing a field the current schema records are re-audited too,
+            # so adding a field does not silently leave half the file stale.
+            if record.get("status") == "ok" and "created_at" in record:
                 done[record["repo_id"]] = record
     return done
 

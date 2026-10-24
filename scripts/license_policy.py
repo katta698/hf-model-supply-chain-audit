@@ -140,3 +140,22 @@ def classify(license_tag):
 def ship_without_review(license_tag):
     """True only when no human needs to look at the licence."""
     return classify(license_tag) == PERMISSIVE_BUCKET
+
+
+def export_rules():
+    """The policy as plain data, so other runtimes can apply the same rules.
+
+    The browser-based Space reimplements classify() in JavaScript. Rather than
+    maintain two copies of the licence lists -- which would drift, and would
+    mean the public tool grading models differently from the published dataset
+    -- both read from this one export.
+    """
+    return {
+        "permissive": sorted(PERMISSIVE),
+        "conditional": sorted(CONDITIONAL),
+        "conditional_prefixes": sorted(CONDITIONAL_PREFIXES),
+        "non_commercial": sorted(NON_COMMERCIAL),
+        "non_commercial_prefixes": sorted(NON_COMMERCIAL_PREFIXES),
+        "unclearable": sorted(t for t in UNCLEARABLE if t),
+        "severity": list(SEVERITY),
+    }

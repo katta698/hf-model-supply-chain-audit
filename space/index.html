@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Model supply chain review</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --line: #30363d;
+    --fg: #e6edf3; --dim: #8b949e; --accent: #58a6ff;
+    --pass: #3fb950; --review: #d29922; --block: #f85149;
+  }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg: #ffffff; --panel: #f6f8fa; --line: #d1d9e0;
+      --fg: #1f2328; --dim: #59636e; --accent: #0969da;
+      --pass: #1a7f37; --review: #9a6700; --block: #cf222e;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 2rem 1rem 4rem; background: var(--bg); color: var(--fg);
+    font: 15px/1.6 ui-sans-serif, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 1.6rem; margin: 0 0 .4rem; letter-spacing: -.01em; }
+  .sub { color: var(--dim); margin: 0 0 1.5rem; }
+  .sub a { color: var(--accent); }
+  form { display: flex; gap: .5rem; margin-bottom: .75rem; }
+  input[type=text] {
+    flex: 1; min-width: 0; padding: .7rem .9rem; border-radius: 8px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--fg);
+    font: inherit; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  }
+  input[type=text]:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+  button {
+    padding: .7rem 1.2rem; border-radius: 8px; border: 1px solid var(--accent);
+    background: var(--accent); color: #fff; font: inherit; font-weight: 600;
+    cursor: pointer; white-space: nowrap;
+  }
+  button:disabled { opacity: .55; cursor: default; }
+  .examples { font-size: .85rem; color: var(--dim); margin-bottom: 2rem; }
+  .examples button {
+    background: none; border: 1px solid var(--line); color: var(--dim);
+    padding: .2rem .55rem; border-radius: 999px; font-size: .8rem;
+    font-family: ui-monospace, monospace; margin: .2rem .25rem .2rem 0; font-weight: 400;
+  }
+  .examples button:hover { color: var(--fg); border-color: var(--dim); }
+  .card {
+    border: 1px solid var(--line); border-radius: 10px; background: var(--panel);
+    padding: 1.25rem; margin-bottom: 1rem;
+  }
+  .verdict { display: flex; align-items: baseline; gap: .6rem; flex-wrap: wrap; margin-bottom: 1rem; }
+  .badge { font-weight: 700; letter-spacing: .06em; font-size: .9rem; padding: .2rem .6rem; border-radius: 6px; }
+  .PASS   { color: var(--pass);   border: 1px solid var(--pass); }
+  .REVIEW { color: var(--review); border: 1px solid var(--review); }
+  .BLOCK  { color: var(--block);  border: 1px solid var(--block); }
+  .repo { font-family: ui-monospace, monospace; font-size: 1.05rem; word-break: break-all; }
+  dl { display: grid; grid-template-columns: max-content 1fr; gap: .3rem 1rem; margin: 0 0 1rem; font-size: .9rem; }
+  dt { color: var(--dim); }
+  dd { margin: 0; font-family: ui-monospace, monospace; word-break: break-all; }
+  h3 { font-size: .8rem; text-transform: uppercase; letter-spacing: .08em;
+       color: var(--dim); margin: 1.2rem 0 .5rem; font-weight: 600; }
+  ul { margin: 0; padding-left: 1.1rem; }
+  li { margin-bottom: .6rem; }
+  li:last-child { margin-bottom: 0; }
+  code { font-family: ui-monospace, monospace; font-size: .88em;
+         background: rgba(127,127,127,.15); padding: .1em .35em; border-radius: 4px; }
+  .rarity { display: block; color: var(--dim); font-size: .85rem; margin-top: .2rem; }
+  footer { color: var(--dim); font-size: .85rem; margin-top: 2.5rem;
+           border-top: 1px solid var(--line); padding-top: 1rem; }
+  footer a { color: var(--accent); }
+  .err { color: var(--block); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Model supply chain review</h1>
+  <p class="sub">
+    What a production security review should ask about a Hugging Face model
+    <strong>before its weights enter a cloud account</strong>: is the revision
+    pinned, do the weights execute code when loaded, does loading fetch code
+    from <em>another</em> repo, and can the licence be cleared without a human?
+    <br><span id="baseline-note">Loading baseline&hellip;</span>
+  </p>
+
+  <form id="form">
+    <input type="text" id="repo" placeholder="org/model-name" autocomplete="off" spellcheck="false" autofocus>
+    <button type="submit" id="go">Review</button>
+  </form>
+
+  <div class="examples">
+    Try:
+    <button data-repo="jinaai/jina-embeddings-v2-base-en">jina-embeddings-v2-base-en</button>
+    <button data-repo="facebook/esmfold_v1">esmfold_v1</button>
+    <button data-repo="sentence-transformers/all-MiniLM-L6-v2">all-MiniLM-L6-v2</button>
+    <button data-repo="meta-llama/Llama-3.1-8B-Instruct">Llama-3.1-8B-Instruct</button>
+    <button data-repo="google/gemma-4-E2B-it">gemma-4-E2B-it</button>
+  </div>
+
+  <div id="out"></div>
+
+  <footer>
+    Runs entirely in your browser &mdash; every request goes straight from you to
+    the Hub, and nothing is sent to a server. Metadata only; no weights are
+    downloaded. Findings describe what a format <em>permits</em>, not evidence of
+    wrongdoing.
+    <br><br>
+    <a href="https://huggingface.co/datasets/katta698/hf-model-supply-chain-audit">Dataset</a> &middot;
+    <a href="https://github.com/katta698/hf-model-supply-chain-audit">Code</a> &middot;
+    built by <a href="https://huggingface.co/katta698">@katta698</a>
+  </footer>
+</main>
+
+<script type="module">
+const HUB = "https://huggingface.co";
+const BASELINE_REPO = "katta698/hf-model-supply-chain-audit";
+const BASELINE_FILE = "top_600.jsonl";
+const PICKLE_RE = /\.(bin|pt|pth|pkl|ckpt)$/;
+
+// ---------------------------------------------------------------------------
+// Licence policy, read from the same JSON the Python audit exports, so the
+// tool and the published dataset cannot grade a licence differently.
+// ---------------------------------------------------------------------------
+const RULES = await fetch("license_policy.json").then(r => r.json());
+
+function classify(tag) {
+  if (Array.isArray(tag)) {
+    if (!tag.length) return "unclearable";
+    const seen = new Set(tag.map(classify));
+    // Most restrictive wins: a multi-licence card does not say whether it
+    // means "take your pick" or "different parts, different terms".
+    return RULES.severity.find(b => seen.has(b));
+  }
+  if (typeof tag !== "string") return "unclearable";
+  const t = tag.trim().toLowerCase();
+  if (!t || RULES.unclearable.includes(t)) return "unclearable";
+  if (RULES.non_commercial.includes(t) ||
+      RULES.non_commercial_prefixes.some(p => t.startsWith(p))) return "non_commercial";
+  if (RULES.permissive.includes(t)) return "permissive";
+  if (RULES.conditional.includes(t) ||
+      RULES.conditional_prefixes.some(p => t.startsWith(p))) return "conditional";
+  return "unclearable";  // never fail open on an unrecognised tag
+}
+
+// ---------------------------------------------------------------------------
+// Baseline: how unusual is a finding? Loaded from the published dataset, so
+// re-publishing the audit updates this page with no code change.
+// ---------------------------------------------------------------------------
+let BASE = null;
+
+async function loadBaseline() {
+  const url = `${HUB}/datasets/${BASELINE_REPO}/resolve/main/${BASELINE_FILE}`;
+  const rows = (await (await fetch(url)).text())
+    .split("\n").filter(Boolean).map(JSON.parse)
+    .filter(r => r.status === "ok");
+  if (!rows.length) return null;
+  const pct = f => rows.filter(f).length / rows.length * 100;
+  return {
+    n: rows.length,
+    pickle_only: pct(r => r.pickle_files.length && !r.safetensors_files.length),
+    remote_code: pct(r => r.remote_code.length),
+    remote_code_external: pct(r => r.remote_code_external.length),
+    unclearable: pct(r => r.license_bucket === "unclearable"),
+    gated: pct(r => r.gated),
+  };
+}
+
+const rarity = (key, label) => BASE
+  ? `<span class="rarity">Only ${BASE[key].toFixed(1)}% of the ${BASE.n} most-downloaded models ${label}.</span>`
+  : "";
+
+// ---------------------------------------------------------------------------
+// The review
+// ---------------------------------------------------------------------------
+const esc = s => String(s).replace(/[&<>]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;" }[c]));
+const card = html => `<div class="card">${html}</div>`;
+
+async function review(input) {
+  let repo = (input || "").trim().replace(/^https?:\/\/huggingface\.co\//, "").replace(/\/+$/, "");
+  if (!repo) return "";
+
+  const res = await fetch(`${HUB}/api/models/${repo}?blobs=true`);
+  if (res.status === 404) {
+    return card(`<p class="err"><strong>Not found.</strong> <code>${esc(repo)}</code> does not exist,
+      is private, or is a dataset rather than a model.</p>`);
+  }
+  if (res.status === 401 || res.status === 403) {
+    return card(`<p><strong>Gated.</strong> <code>${esc(repo)}</code> needs an accepted licence
+      agreement before its metadata can be read. No CI job pulls this without a credentialed token.</p>`);
+  }
+  if (!res.ok) return card(`<p class="err">Hub returned HTTP ${res.status}.</p>`);
+
+  const info = await res.json();
+  const files = (info.siblings || []).map(f => f.rfilename);
+  const pickles = files.filter(f => PICKLE_RE.test(f));
+  const safetensors = files.filter(f => f.endsWith(".safetensors"));
+  const pickleOnly = pickles.length > 0 && safetensors.length === 0;
+
+  // auto_map is what actually executes on load -- not the presence of .py files.
+  let code = [];
+  if (files.includes("config.json")) {
+    try {
+      const cfg = await (await fetch(`${HUB}/${repo}/resolve/${info.sha}/config.json`)).json();
+      code = [...new Set(Object.values(cfg.auto_map || {}))];
+    } catch { /* no readable config is not a finding */ }
+  }
+  const external = code.filter(t => t.includes("--"));
+  const rawLicense = info.cardData?.license ?? null;
+  const bucket = classify(rawLicense);
+  const licenseText = Array.isArray(rawLicense) ? rawLicense.join(", ") : (rawLicense || "not declared");
+
+  const blocking = [], needsHuman = [], notes = [];
+
+  if (pickleOnly) {
+    blocking.push(`<strong>Pickle-only weights.</strong> No safetensors alternative, so loading this
+      model executes whatever is in the file. No flag avoids it.${rarity("pickle_only", "do this")}`);
+  } else if (pickles.length) {
+    notes.push(`Ships ${pickles.length} pickle file(s) <strong>and</strong> safetensors &mdash; load the
+      safe one explicitly; some loaders still default to the pickle.`);
+  } else if (safetensors.length) {
+    notes.push("safetensors only &mdash; the weights cannot carry code.");
+  }
+
+  if (bucket === "non_commercial") {
+    blocking.push(`<strong>Licence <code>${esc(licenseText)}</code> forbids commercial use.</strong>
+      Cannot ship in a product.`);
+  } else if (bucket === "unclearable") {
+    needsHuman.push(`<strong>Licence <code>${esc(licenseText)}</code> decides nothing.</strong> Someone
+      has to read the actual terms; no automated gate can clear it.${rarity("unclearable", "are in this position")}`);
+  } else if (bucket === "conditional") {
+    needsHuman.push(`<strong>Licence <code>${esc(licenseText)}</code> permits commercial use with
+      obligations</strong> &mdash; naming, acceptable-use or copyleft terms a human must read first.`);
+  } else {
+    notes.push(`Licence <code>${esc(licenseText)}</code> &mdash; permissive, ship it.`);
+  }
+
+  if (external.length) {
+    const repos = [...new Set(external.map(t => t.split("--")[0]))];
+    blocking.push(`<strong>Executes code from a DIFFERENT repo</strong>:
+      ${repos.map(r => `<code>${esc(r)}</code>`).join(", ")}. Pinning this model's revision does
+      <strong>not</strong> pin that code, so a &ldquo;reproducible&rdquo; artifact can change underneath
+      you.${rarity("remote_code_external", "do this")}`);
+  } else if (code.length) {
+    needsHuman.push(`<strong>Executes remote code on load</strong> (<code>trust_remote_code=True</code>
+      required). That code is not reviewed by Hugging Face.${rarity("remote_code", "do this")}`);
+  }
+
+  if (info.gated) {
+    needsHuman.push(`<strong>Gated (<code>${esc(info.gated)}</code>)</strong> &mdash; a person must accept
+      an agreement, and any automated pull needs a credentialed token.${rarity("gated", "are gated")}`);
+  }
+
+  const verdict = blocking.length ? "BLOCK" : (needsHuman.length ? "REVIEW" : "PASS");
+  const section = (title, items) => items.length
+    ? `<h3>${title}</h3><ul>${items.map(i => `<li>${i}</li>`).join("")}</ul>` : "";
+
+  return card(`
+    <div class="verdict">
+      <span class="badge ${verdict}">${verdict}</span>
+      <span class="repo">${esc(repo)}</span>
+    </div>
+    <dl>
+      <dt>revision</dt><dd>${esc(info.sha)}</dd>
+      <dt>created</dt><dd>${esc((info.createdAt || "unknown").slice(0, 10))}</dd>
+      <dt>downloads</dt><dd>${(info.downloads ?? 0).toLocaleString()}/month</dd>
+      <dt>task</dt><dd>${esc(info.pipeline_tag || "—")}</dd>
+    </dl>
+    ${section("Blocking", blocking)}
+    ${section("Needs a human", needsHuman)}
+    ${section("Notes", notes)}
+  `);
+}
+
+// ---------------------------------------------------------------------------
+// Wiring
+// ---------------------------------------------------------------------------
+const $ = s => document.querySelector(s);
+const out = $("#out"), box = $("#repo"), go = $("#go");
+
+async function run(repo) {
+  box.value = repo;
+  out.innerHTML = card("<p>Checking&hellip;</p>");
+  go.disabled = true;
+  try {
+    out.innerHTML = await review(repo);
+  } catch (err) {
+    out.innerHTML = card(`<p class="err">Something went wrong: ${esc(err.message)}</p>`);
+  } finally {
+    go.disabled = false;
+  }
+}
+
+$("#form").addEventListener("submit", e => { e.preventDefault(); run(box.value); });
+document.querySelectorAll(".examples button")
+  .forEach(b => b.addEventListener("click", () => run(b.dataset.repo)));
+
+BASE = await loadBaseline();
+$("#baseline-note").innerHTML = BASE
+  ? `Findings graded against the <strong>${BASE.n} most-downloaded models</strong> on the Hub.`
+  : `<em>Baseline unavailable &mdash; findings shown without context.</em>`;
+</script>
+</body>
+</html>

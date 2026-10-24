@@ -26,7 +26,7 @@ revision, weight file format, whether loading the model executes code fetched
 from the Hub, gating, and whether the declared licence can be cleared without a
 human reading it.
 
-Snapshot taken **2026-10-19**. Every row carries the commit SHA it was observed
+Snapshot taken **2026-10-22**. Every row carries the commit SHA it was observed
 at, so any claim here can be re-checked against that exact revision.
 
 Code: [github.com/katta698/hf-model-supply-chain-audit](https://github.com/katta698/hf-model-supply-chain-audit)
@@ -53,20 +53,20 @@ whether the Hub is compromised.
 
 | Property | Count |
 |---|---|
-| Ship at least one pickle-format weight file | 243 / 600 (41%) |
-| **Ship pickle with no safetensors alternative** | **82 / 600 (14%)** |
-| Execute remote code on load (`auto_map`) | 34 / 600 (6%) |
-| — where that code lives in a *different* repo | 8 / 600 (1%) |
-| Gated (requires token + accepted terms) | 16 / 600 (3%) |
+| Ship at least one pickle-format weight file | 247 / 600 (41%) |
+| **Ship pickle with no safetensors alternative** | **86 / 600 (14%)** |
+| Execute remote code on load (`auto_map`) | 31 / 600 (5%) |
+| — where that code lives in a *different* repo | 7 / 600 (1%) |
+| Gated (requires token + accepted terms) | 15 / 600 (2%) |
 
 Licence, bucketed by what a commercial review would actually decide:
 
 | Bucket | Meaning | Count |
 |---|---|---|
-| `permissive` | ship it, attribution at most | 454 / 600 (76%) |
-| `conditional` | commercial use allowed, with obligations | 28 / 600 (5%) |
+| `permissive` | ship it, attribution at most | 461 / 600 (77%) |
+| `conditional` | commercial use allowed, with obligations | 27 / 600 (4%) |
 | `non_commercial` | cannot ship in a commercial product | 14 / 600 (2%) |
-| `unclearable` | tag decides nothing; a human must read the terms | 103 / 600 (17%) |
+| `unclearable` | tag decides nothing; a human must read the terms | 98 / 600 (16%) |
 
 Of the `unclearable` group, 38 declare no licence at all.
 
@@ -79,20 +79,20 @@ is **wrong for the headline risk**:
 
 | | top 100 | rank 101–600 | ratio |
 |---|---|---|---|
-| pickle-only | 17.0% | 13.0% | **0.8×** |
-| remote code on load | 2.0% | 6.4% | **3.2×** |
-| licence unclearable | 14.0% | 17.8% | 1.3× |
-| no licence tag | 6.0% | 6.6% | 1.1× |
+| pickle-only | 17.0% | 13.8% | **0.8×** |
+| remote code on load | 2.0% | 5.8% | **2.9×** |
+| licence unclearable | 14.0% | 16.8% | 1.2× |
+| no licence tag | 6.0% | 6.4% | 1.1× |
 
 **Pickle risk is concentrated at the top of the Hub, not the tail.** The most
 popular models are *more* likely to leave you no safe option.
 
-**Remote code execution is 3× more common outside the top 100**, and it is the
+**Remote code execution is nearly 3× more common outside the top 100**, and it is the
 higher-severity of the two risks.
 
 A note on reading these numbers: a six-band breakdown by rank appeared to show
 licence clarity degrading steadily with popularity, reaching 28% unclearable at
-ranks 501-600. The two-way split says 17.8%. **At 100 models per band that
+ranks 501-600. The two-way split says 16.8%. **At 100 models per band that
 apparent trend was mostly noise**, and only the two-way split is reported here.
 
 The obvious explanation for the first result is age rather than popularity — the
@@ -150,12 +150,12 @@ Reproduce with `scripts/analyze_age.py`.
 
 ## What's actually interesting
 
-**The pickle number that matters is 82, not 243.** Most models that ship a
-pickle file also ship safetensors — you can simply load the safe one. For 82 of
+**The pickle number that matters is 86, not 247.** Most models that ship a
+pickle file also ship safetensors — you can simply load the safe one. For 86 of
 these 600 there is no safe option: using the model means unpickling, which means
 executing whatever is in the file. No flag avoids it.
 
-**Pinning a revision does not necessarily pin the code that runs.** Eight models
+**Pinning a revision does not necessarily pin the code that runs.** Seven models
 here declare an `auto_map` whose targets live in a *separate* repo — for example
 `jinaai/jina-embeddings-v2-base-en`. You can pin the model to an exact commit,
 believe you have a reproducible artifact, and still have the executed code
@@ -163,7 +163,7 @@ change underneath you, because you never pinned the other repo. Prefixed
 `auto_map` targets (`org/repo--module.Class`) are the signal; the
 `remote_code_external` field flags them.
 
-**17% of these models cannot be licence-cleared by a machine.** Not because the
+**16% of these models cannot be licence-cleared by a machine.** Not because the
 terms are bad, but because the tag carries no decidable information. Any
 automated licence gate has to treat them as manual review, and in practice that
 means they get waved through.

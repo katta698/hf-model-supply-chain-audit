@@ -1,0 +1,63 @@
+{
+  "conditional": [
+    "agpl-3.0",
+    "apple-amlr",
+    "apple-ascl",
+    "cc-by-sa-3.0",
+    "cc-by-sa-4.0",
+    "deepfloyd-if-license",
+    "epl-1.0",
+    "epl-2.0",
+    "fair-noncommercial-research-license",
+    "gpl-2.0",
+    "gpl-3.0",
+    "lgpl-2.1",
+    "lgpl-3.0",
+    "mpl-2.0",
+    "osl-3.0"
+  ],
+  "conditional_prefixes": [
+    "bigcode-openrail",
+    "bigscience-openrail",
+    "creativeml-openrail",
+    "gemma",
+    "llama",
+    "openrail",
+    "qwen"
+  ],
+  "non_commercial": [
+    "cc-by-nd-4.0"
+  ],
+  "non_commercial_prefixes": [
+    "cc-by-nc"
+  ],
+  "permissive": [
+    "apache-2.0",
+    "artistic-2.0",
+    "bsd",
+    "bsd-2-clause",
+    "bsd-3-clause",
+    "bsl-1.0",
+    "cc-by-2.0",
+    "cc-by-3.0",
+    "cc-by-4.0",
+    "cc0-1.0",
+    "ecl-2.0",
+    "isc",
+    "mit",
+    "postgresql",
+    "unlicense",
+    "wtfpl",
+    "zlib"
+  ],
+  "severity": [
+    "non_commercial",
+    "unclearable",
+    "conditional",
+    "permissive"
+  ],
+  "unclearable": [
+    "other",
+    "unknown"
+  ]
+}

@@ -40,14 +40,14 @@ what format the weights are in and whether loading them runs code. Those
 controls do not depend on the Hub being uncompromised, which is the only
 property worth designing for.
 
-## Findings, 600 most-downloaded models (2026-10-19)
+## Findings, 600 most-downloaded models (2026-10-22)
 
 | | Count |
 |---|---|
-| Ship pickle weights with **no safetensors alternative** | 82 / 600 (14%) |
-| Execute remote code on load (`auto_map`) | 34 / 600 (6%) |
-| — where that code lives in a **different repo** | 8 / 600 (1%) |
-| Licence not clearable without a human reading it | 103 / 600 (17%) |
+| Ship pickle weights with **no safetensors alternative** | 86 / 600 (14%) |
+| Execute remote code on load (`auto_map`) | 31 / 600 (5%) |
+| — where that code lives in a **different repo** | 7 / 600 (1%) |
+| Licence not clearable without a human reading it | 98 / 600 (16%) |
 
 ### Is the long tail worse? Mostly no.
 
@@ -56,14 +56,14 @@ headline risk and right for a different one:
 
 | | top 100 | rank 101–600 | ratio |
 |---|---|---|---|
-| pickle-only | 17.0% | 13.0% | **0.8×** |
-| remote code on load | 2.0% | 6.4% | **3.2×** |
-| licence unclearable | 14.0% | 17.8% | 1.3× |
-| no licence tag | 6.0% | 6.6% | 1.1× |
+| pickle-only | 17.0% | 13.8% | **0.8×** |
+| remote code on load | 2.0% | 5.8% | **2.9×** |
+| licence unclearable | 14.0% | 16.8% | 1.2× |
+| no licence tag | 6.0% | 6.4% | 1.1× |
 
 **Pickle risk is concentrated at the top of the Hub, not the tail.**
 
-**Remote code execution is 3× more common outside the top 100**, and that is the
+**Remote code execution is nearly 3× more common outside the top 100**, and that is the
 higher-severity finding of the two.
 
 ### Age explains the first result — and exposes a second one
@@ -106,7 +106,7 @@ a reproducible artifact, and still have the executed code change underneath you,
 because you never pinned the other repo. Prefixed `auto_map` targets
 (`org/repo--module.Class`) are the signal; `remote_code_external` flags them.
 
-## Two measurement mistakes worth documenting
+## Three measurement mistakes worth documenting
 
 Both produced confident, wrong output in earlier runs. They are the reason this
 repo exists rather than a one-off script.
@@ -120,7 +120,7 @@ in another repo. The deciding signal is `auto_map` in `config.json`.
 repos succeed; only file downloads are blocked. That check reported 0% gated
 against models that are demonstrably gated. `ModelInfo.gated` is the signal.
 
-A third, found only by scaling from 100 to 600 models: the `config.json` fetch
+**Found only by scaling from 100 to 600 models:** the `config.json` fetch
 originally caught every exception and returned "no remote code", so a *throttled*
 request would have been silently recorded as a clean result — a false negative in
 the single field that matters most. Throttling now propagates and is retried.

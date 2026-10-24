@@ -90,6 +90,11 @@ popular models are *more* likely to leave you no safe option.
 **Remote code execution is 3× more common outside the top 100**, and it is the
 higher-severity of the two risks.
 
+A note on reading these numbers: a six-band breakdown by rank appeared to show
+licence clarity degrading steadily with popularity, reaching 28% unclearable at
+ranks 501-600. The two-way split says 17.8%. **At 100 models per band that
+apparent trend was mostly noise**, and only the two-way split is reported here.
+
 The obvious explanation for the first result is age rather than popularity — the
 most-downloaded list is full of pre-safetensors models like BERT, CLIP and
 wav2vec2. That is measured below, and it leads somewhere more interesting than
@@ -142,11 +147,6 @@ pickle-only. This measures era of origin, not era of current contents — good
 enough for the trend, not a precise instrument.
 
 Reproduce with `scripts/analyze_age.py`.
-
-A note on reading these numbers: a six-band breakdown by rank appeared to show
-licence clarity degrading steadily with popularity, reaching 28% unclearable at
-ranks 501–600. The two-way split says 17.8%. **At 100 models per band that
-apparent trend was mostly noise**, and only the two-way split is reported here.
 
 ## What's actually interesting
 
@@ -261,7 +261,7 @@ metadata.
 
 ## Author
 
-Built by Jayant Katta ([@katta698](https://huggingface.co/katta698)) while
+Built by Jayanth Katta ([@katta698](https://huggingface.co/katta698)) while
 working out how model artifacts should be governed on the way into a cloud
 production account.
 

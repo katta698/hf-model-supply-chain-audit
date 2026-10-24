@@ -136,6 +136,8 @@ The three pickle files, nine ONNX variants, `rust_model.ot` and
 `train_script.py` are simply absent from the mirror. A consumer cannot load
 them by accident because they are not there.
 
+![Mirrored model in S3](docs/screenshots/03-mirrored-model.png)
+
 ### 3. The route table — the control itself
 
 ```
@@ -147,6 +149,10 @@ $ aws ec2 describe-route-tables --route-table-ids rtb-09261d2142fe5f316
 ```
 
 Two routes. Local traffic, and S3 via the gateway endpoint. **No `0.0.0.0/0`.**
+
+![Route table with no default route](docs/screenshots/01-route-table-no-egress.png)
+
+![S3 gateway endpoint](docs/screenshots/02-s3-gateway-endpoint.png)
 
 ```
 $ aws ec2 describe-internet-gateways --filters Name=attachment.vpc-id,Values=vpc-00d0a559f841b6538 \
@@ -189,6 +195,8 @@ model read over the S3 gateway endpoint:
   integrity_ok           True
 ```
 
+![Lambda attached to the private subnet](docs/screenshots/04-lambda-vpc-config.png)
+
 ### 5. Tampering is caught
 
 Flip a single byte after download and before verification:
@@ -209,6 +217,31 @@ A container would refuse to start here.
 $ echo $?
 1
 ```
+
+
+### A note on the screenshots
+
+Captured with `scripts/capture_console.py`, which signs in through the STS
+federation endpoint and blacks out identity before the shutter fires. The
+black bars are the account id, the signed-in principal and the SSO display
+name; everything that matters as evidence is left legible.
+
+Getting that right took five attempts, and the failures are instructive:
+
+1. Editing the text did not stick -- the console is React and re-rendered it.
+2. A MutationObserver that re-applied made the page flap, so the screenshot
+   caught a dirty frame while a check a moment later saw it clean. **The
+   verification passed while the PNG contained the account id**, which is
+   worse than having no verification.
+3. Matching only childless elements missed the Owner ID, which sits in a
+   container holding both a copy-button and a bare text node.
+4. The redaction and the verification both ran only on the main frame. The
+   VPC detail panel is an iframe, so the two agreed with each other and were
+   both wrong.
+
+The fix is overlays drawn outside the React tree, applied in every frame, and
+verified geometrically -- every element matching a sensitive pattern must be
+covered by a box -- both before and after the capture.
 
 ---
 

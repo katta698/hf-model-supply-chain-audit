@@ -90,53 +90,89 @@ def resolve(target, region):
     )
 
 
-# Redaction runs in the page before the screenshot is taken, so the sensitive
-# values never reach the PNG. Editing the image afterwards would need OCR and
-# would miss anything the model failed to read.
+# Redaction draws opaque boxes over the offending elements rather than editing
+# their text.
+#
+# Editing text does not survive: the console is a React app, so it re-renders
+# and restores the original. A MutationObserver that re-applies only makes the
+# page flap between states, and the screenshot lands on whichever frame it
+# lands on -- while a check run a moment later sees it clean. That produced a
+# PNG containing the account id while verification reported success, which is
+# worse than no verification at all.
+#
+# Overlays are appended to documentElement, outside the React root, so nothing
+# re-renders them away and nothing we do triggers a re-render in the first
+# place. Verification is then geometric: every element whose text matches must
+# be covered by an overlay.
 REDACT_JS = """
 ({patterns, selectors}) => {
-  const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEXTAREA']);
-  const regexes = patterns.map(p => new RegExp(p, 'gi'));
-  const mask = m => '\\u2588'.repeat(Math.max(4, Math.min(m.length, 20)));
+  const MARK = 'data-redact-overlay';
+  document.querySelectorAll('[' + MARK + ']').forEach(e => e.remove());
 
-  let hits = 0;
+  const SKIP = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TITLE']);
 
-  // Whole elements known to carry identity, blacked out regardless of their
-  // contents. More durable than matching text for console chrome: the SSO
-  // display name is not derivable from the ARN, so no pattern would catch it.
-  for (const sel of selectors) {
-    for (const el of document.querySelectorAll(sel)) {
-      const len = (el.textContent || '').trim().length || 12;
-      el.textContent = '\\u2588'.repeat(Math.min(len, 24));
-      el.style.background = '#000';
-      el.style.color = '#000';
-      hits++;
+  // Walk text nodes, not elements. Matching only childless elements misses
+  // the common console pattern of a container holding both a copy-button and
+  // a bare text node -- which is exactly where the account id lives.
+  const matches = () => {
+    const res = patterns.map(p => new RegExp(p, 'gi'));
+    const hit = new Set();
+    const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+    while (walker.nextNode()) {
+      const node = walker.currentNode;
+      const text = (node.nodeValue || '').trim();
+      if (!text) continue;
+      const parent = node.parentElement;
+      if (!parent || SKIP.has(parent.tagName)) continue;
+      if (res.some(r => { r.lastIndex = 0; return r.test(text); })) hit.add(parent);
     }
-  }
-  const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
-  const nodes = [];
-  while (walker.nextNode()) nodes.push(walker.currentNode);
-
-  for (const node of nodes) {
-    const parent = node.parentElement;
-    if (!parent || SKIP.has(parent.tagName)) continue;
-    let text = node.nodeValue;
-    const before = text;
-    for (const re of regexes) text = text.replace(re, mask);
-    if (text !== before) { node.nodeValue = text; hits++; }
-  }
-
-  // Attributes render as tooltips and can leak the same values.
-  for (const el of document.querySelectorAll('[title], [aria-label], input[value]')) {
-    for (const attr of ['title', 'aria-label', 'value']) {
-      const v = el.getAttribute(attr);
-      if (!v) continue;
-      let out = v;
-      for (const re of regexes) out = out.replace(re, mask);
-      if (out !== v) { el.setAttribute(attr, out); hits++; }
+    for (const sel of selectors) {
+      for (const el of document.querySelectorAll(sel)) hit.add(el);
     }
+    return [...hit];
+  };
+
+  window.__redactTargets = matches;
+
+  let drawn = 0;
+  for (const el of matches()) {
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) continue;        // not rendered
+    const box = document.createElement('div');
+    box.setAttribute(MARK, '');
+    Object.assign(box.style, {
+      position: 'fixed',
+      left: (r.left - 1) + 'px', top: (r.top - 1) + 'px',
+      width: (r.width + 2) + 'px', height: (r.height + 2) + 'px',
+      background: '#000', zIndex: '2147483647', pointerEvents: 'none',
+    });
+    document.documentElement.appendChild(box);
+    drawn++;
   }
-  return hits;
+  return drawn;
+}
+"""
+
+# Geometric check: anything still showing a sensitive value must sit under an
+# overlay. Text-based checking cannot work here, because the text is
+# deliberately left in place and only covered.
+VERIFY_JS = """
+() => {
+  const boxes = [...document.querySelectorAll('[data-redact-overlay]')]
+    .map(o => o.getBoundingClientRect());
+  const covered = (r) => boxes.some(b =>
+    b.left <= r.left + 1 && b.top <= r.top + 1 &&
+    b.right >= r.right - 1 && b.bottom >= r.bottom - 1);
+
+  const uncovered = [];
+  for (const el of (window.__redactTargets ? window.__redactTargets() : [])) {
+    const r = el.getBoundingClientRect();
+    if (r.width < 1 || r.height < 1) continue;
+    // Only the visible viewport reaches the screenshot.
+    if (r.bottom < 0 || r.top > innerHeight || r.right < 0 || r.left > innerWidth) continue;
+    if (!covered(r)) uncovered.push((el.textContent || '').trim().slice(0, 60));
+  }
+  return uncovered;
 }
 """
 
@@ -174,10 +210,26 @@ def re_escape(value):
     return re.escape(value)
 
 
-def leaked(page, literals):
-    """Values still visible after redaction. Should always be empty."""
-    text = page.evaluate("() => document.body.innerText")
-    return [v for v in literals if v and v.lower() in text.lower()]
+def each_frame(page, js, arg=None):
+    """Run js in every frame. Console pages render panels inside iframes, so
+    touching only the main frame silently misses whatever is in them.
+
+    Returns (results, inaccessible) -- cross-origin frames cannot be scripted
+    and are reported rather than ignored.
+    """
+    results, inaccessible = [], 0
+    for frame in page.frames:
+        try:
+            results.append(frame.evaluate(js, arg) if arg is not None else frame.evaluate(js))
+        except Exception:
+            inaccessible += 1
+    return results, inaccessible
+
+
+def uncovered(page):
+    """Anything still showing a sensitive value, across every frame."""
+    results, _ = each_frame(page, VERIFY_JS)
+    return [item for frame_result in results for item in frame_result]
 
 
 def capture(page, url, path, settle_ms, patterns, literals):
@@ -188,19 +240,36 @@ def capture(page, url, path, settle_ms, patterns, literals):
 
     redacted = 0
     if patterns:
-        redacted = page.evaluate(
-            REDACT_JS, {"patterns": patterns, "selectors": REDACT_SELECTORS}
-        )
-        # Redacting is not the same as having verified the redaction. Check
-        # the rendered text before committing anything to a PNG.
-        still_there = leaked(page, literals)
-        if still_there:
+        payload = {"patterns": patterns, "selectors": REDACT_SELECTORS}
+        each_frame(page, REDACT_JS, payload)
+
+        # Late-arriving content would land uncovered, so settle and redraw.
+        page.wait_for_timeout(1500)
+        counts, blocked = each_frame(page, REDACT_JS, payload)
+        redacted = sum(counts)
+        if blocked:
+            print(f"       note: {blocked} frame(s) not scriptable (cross-origin)")
+
+        missed = uncovered(page)
+        if missed:
             raise RuntimeError(
-                "redaction incomplete, refusing to screenshot: "
-                + ", ".join(still_there)
+                "redaction incomplete, refusing to screenshot: " + "; ".join(missed[:5])
             )
 
     page.screenshot(path=str(path), full_page=False)
+
+    # Check again after the capture. The first check only proves the page was
+    # covered at that instant; anything that moved or re-rendered in between
+    # would be in the PNG regardless.
+    if patterns:
+        missed = uncovered(page)
+        if missed:
+            path.unlink(missing_ok=True)
+            raise RuntimeError(
+                "page changed during capture, screenshot discarded: "
+                + "; ".join(missed[:5])
+            )
+
     return path.stat().st_size, redacted
 
 

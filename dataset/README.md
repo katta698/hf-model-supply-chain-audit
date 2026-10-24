@@ -265,5 +265,7 @@ Built by Jayanth Katta ([@katta698](https://huggingface.co/katta698)) while
 working out how model artifacts should be governed on the way into a cloud
 production account.
 
+[jayanthkatta.com](https://www.jayanthkatta.com) · [LinkedIn](https://www.linkedin.com/in/jayanthkatta) · [GitHub](https://github.com/katta698)
+
 Corrections welcome — particularly on the licence buckets, which are a
 judgement call and are meant to be argued with.

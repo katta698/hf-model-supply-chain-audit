@@ -66,3 +66,5 @@ models do this. Try `jinaai/jina-embeddings-v2-base-en`.
 - **Code:** [github.com/katta698/hf-model-supply-chain-audit](https://github.com/katta698/hf-model-supply-chain-audit)
 
 Built by Jayanth Katta ([@katta698](https://huggingface.co/katta698)).
+
+[jayanthkatta.com](https://www.jayanthkatta.com) · [LinkedIn](https://www.linkedin.com/in/jayanthkatta) · [GitHub](https://github.com/katta698)

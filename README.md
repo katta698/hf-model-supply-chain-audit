@@ -189,3 +189,7 @@ is the canonical one, so the two cannot drift.
   any model or author. The point is that the format offers no way to verify the
   claim either way.
 - Hub download counts fluctuate; rankings are as of the snapshot date.
+
+## Author
+
+Jayanth Katta — [jayanthkatta.com](https://www.jayanthkatta.com) · [LinkedIn](https://www.linkedin.com/in/jayanthkatta) · [GitHub](https://github.com/katta698) · [Hugging Face](https://huggingface.co/katta698)

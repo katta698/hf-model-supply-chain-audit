@@ -1,6 +1,6 @@
 # Model supply chain control on AWS — build log and evidence
 
-Built and verified **24 October 2026** in account `684346483786`, `us-east-1`.
+Built and verified **24 October 2026** in account `<ACCOUNT_ID>`, `us-east-1`.
 Torn down the same day. Everything below is real captured output, not
 illustration.
 
@@ -119,7 +119,7 @@ Exit codes are non-zero on BLOCK and un-approved REVIEW, so CI can gate on it.
 
 ```
 $ python scripts/mirror_model.py sentence-transformers/all-MiniLM-L6-v2 \
-    --bucket hf-model-mirror-684346483786-us-east-1
+    --bucket hf-model-mirror-<ACCOUNT_ID>-us-east-1
 
   revision  1110a243fdf4706b3f48f1d95db1a4f5529b4d41
   licence   apache-2.0 -> permissive

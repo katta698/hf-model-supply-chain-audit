@@ -1,0 +1,3 @@
+# Copy to terraform.tfvars and fill in. Not committed: the bucket name
+# embeds an account id, and that does not belong in a public repo.
+bucket_name = "hf-model-mirror-<ACCOUNT_ID>-us-east-1"

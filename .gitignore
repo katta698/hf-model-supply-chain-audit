@@ -2,3 +2,4 @@
 __pycache__/
 *.pyc
 data/
+terraform/lambda-serve/layer/

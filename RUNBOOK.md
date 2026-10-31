@@ -1,11 +1,14 @@
 # Model supply chain control on AWS — build log and evidence
 
-Built and verified **24 October 2026** in account `<ACCOUNT_ID>`, `us-east-1`.
-Torn down the same day. Everything below is real captured output, not
-illustration.
+Two builds in account `<ACCOUNT_ID>`, `us-east-1`, each torn down the same
+day. **Part 1** (24 Oct 2026) gets an approved model into a boundary it
+cannot leave. **Part 2** (30 Oct 2026) serves inference from inside that
+boundary, and measures what it costs.
 
-**Total cost: under $0.01.** No NAT gateway, no Interface endpoints, no
-compute left running.
+Everything below is real captured output, not illustration.
+
+**Total cost of both: under $0.02.** No GPU, no NAT gateway, no Interface
+endpoints, nothing left running.
 
 ---
 
@@ -343,3 +346,161 @@ billing for storage you cannot see.
   currently BLOCK if the code lives elsewhere, which is correct but blunt.
 - **Storage grows with every version.** The lifecycle rule bounds non-current
   versions, not the number of approved revisions.
+
+---
+
+# Part 2 — serving from inside the boundary
+
+Part 1 proved an approved model could get *in*. On its own that is a filing
+cabinet. Part 2 asks whether it can do useful work in there, and what that
+costs against simply calling a managed API.
+
+**Workload:** text embeddings — `all-MiniLM-L6-v2`, int8 ONNX, 384 dimensions.
+Chosen because embeddings are the highest-volume inference most organisations
+actually run, and because it fits on a CPU, so the sovereignty question can be
+answered without a GPU bill confusing the result.
+
+**Deployment:** one Lambda in the same no-egress subnet. On cold start it reads
+the approved revision from S3, verifies every byte against the manifest
+recorded at approval time, and loads it. Each response carries the revision
+that produced it, so any stored vector traces back to an audited artifact.
+
+```
+MIRROR_BUCKET   s3://hf-model-mirror-<ACCOUNT_ID>-us-east-1
+MODEL_FILE      onnx/model_quint8_avx2.onnx     (23 MB, one deliberate artifact)
+memory          2048 MB   (>1769 MB buys a full vCPU; ONNX here is CPU-bound)
+layer           127 MB    onnxruntime, numpy, tokenizers -- no HTTP or Hub client
+```
+
+## Evidence
+
+### It serves, from the mirror, with provenance attached
+
+```
+$ aws lambda invoke --function-name hf-model-mirror-embed     --payload '{"texts":["sovereign inference from a subnet with no internet route", ...]}'
+
+  "model": {
+    "repo": "sentence-transformers/all-MiniLM-L6-v2",
+    "revision": "1110a243fdf4706b3f48f1d95db1a4f5529b4d41",
+    "file": "onnx/model_quint8_avx2.onnx",
+    "approved_at": "2026-10-31T02:32:03.066939+00:00",
+    "verdict_at_approval": "PASS"
+  },
+  "dimensions": 384,
+  "cold_start_s": 0.88,
+  "inference_ms": 21.3
+```
+
+### The output is correct, not merely plausible
+
+A quantised model that loads but produces nonsense still returns
+well-formed floats. Cosine similarity is the cheapest check that it did not:
+
+```
+"The cat sat on the mat"  vs  "A feline rested upon the rug"      0.54
+"The cat sat on the mat"  vs  "Quarterly revenue exceeded..."    -0.001
+"A feline rested..."      vs  "Quarterly revenue exceeded..."    -0.035
+```
+
+### Throughput
+
+```
+ batch  inference ms   ms/text   texts/sec
+     1           7.2      7.20         139
+     8          43.1      5.39         186
+    32         170.2      5.32         188
+    64         329.4      5.15         194
+   128         669.4      5.23         191
+```
+
+Batching past 8 buys nothing. One vCPU, compute-bound, no further parallelism
+to exploit — which is itself useful: there is no point building a batching
+layer for this workload.
+
+## The cost finding, which is not the one I expected
+
+Measured at 16 real tokens per text, batch 128:
+
+| Per million embeddings | |
+|---|---|
+| Self-hosted, Lambda x86 | **$0.174** |
+| Self-hosted, Lambda Graviton (arm64) | $0.139 |
+| Bedrock Titan Text Embeddings v2 | **$0.320** |
+
+**Self-hosting is 1.8× cheaper. Not 100×, not 10×.**
+
+At 10M embeddings/month that is a saving of **$17.52 per year**. Repaying two
+days of engineering at that rate takes **13.7 billion embeddings**.
+
+So the honest conclusion contradicts the usual pitch:
+
+> **Cost is not a reason to self-host embeddings.** Managed embedding pricing
+> has fallen far enough that the saving does not repay the engineering, the
+> on-call, or the cold starts. Build this because the data is not permitted to
+> leave — and if that is not your situation, call the API.
+
+That conclusion makes the sovereignty case *stronger*, not weaker. An argument
+that rests on compliance survives a CFO asking "but what does it save?"; one
+that rests on $17 a year does not.
+
+Note what the $0.174 excludes: cold starts under bursty load, concurrency
+limits, the mirror pipeline, and the engineer maintaining all of it. The gap is
+narrower than the table suggests, not wider.
+
+## What went wrong in Part 2
+
+### I nearly published a 14.6× saving that was wrong by a factor of eight
+
+`all-MiniLM-L6-v2` ships `tokenizer.json` with padding fixed at **128 tokens**.
+A 16-token sentence therefore costs the same compute as a 128-token one. My
+first cost comparison measured 128-token compute against Titan's 16-token
+billing and reported 14.6× — flattering, and nonsense.
+
+The handler was in fact already overriding the padding correctly. I only
+established that by making the Lambda report the sequence length it actually
+ran, rather than reading the config and believing it:
+
+```
+batch 128 -> padded seq len 16, real tokens 2048
+```
+
+The lesson is narrow and repeats throughout this project: **a config file says
+what was intended; instrumentation says what happened.** Cost models built on
+the former are confidently wrong.
+
+### "Mirror the ONNX format" is not a decision
+
+`--formats onnx` pulled all nine ONNX variants — base, four optimisation
+levels, four quantisations — 499 MB. Those are nine *different numerical
+behaviours*. A consumer could load a variant nobody evaluated.
+
+Picking a format is not a decision; picking an artifact is. `--include` now
+takes explicit paths, and the mirror is one 23 MB file.
+
+### I committed 123 MB of third-party wheels
+
+Wrong three ways: it bloats every clone, it passes a build artifact off as
+source, and **git's line-ending conversion rewrote every `.py` in the layer to
+CRLF** — so what was committed was not what was deployed. Replaced with
+`scripts/build_lambda_layer.py`, which rebuilds from pinned versions.
+
+Pinning matters here for the same reason the mirror exists: an unpinned layer
+means the bytes serving inference change without anything in the repo changing.
+
+The build script also strips what pip drags in transitively. `tokenizers`
+depends on `huggingface_hub`, which brings an HTTP client and a Hub client —
+shipping those into a subnet deliberately cut off from the Hub would undercut
+the whole design.
+
+## What Part 2 does not cover
+
+- **One cloud.** The portability claim is unproven until the same pattern runs
+  on Azure and GCP. That is the next piece, and the interesting question is not
+  which is cheapest but *where may this legally run, and what changes when it
+  moves*.
+- **Embeddings only.** A generative model is a different cost shape entirely —
+  output tokens dominate, and CPU stops being viable.
+- **No load test.** Throughput is single-invocation; concurrency, cold-start
+  storms and Lambda limits are unmeasured.
+- **Graviton is calculated, not measured.** The $0.139 applies the published
+  20% arm64 discount to x86 timings; arm64 inference speed was not tested.

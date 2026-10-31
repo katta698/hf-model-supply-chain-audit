@@ -202,3 +202,73 @@ resource "aws_lambda_function" "prover" {
     aws_cloudwatch_log_group.lambda,
   ]
 }
+
+# ---------------------------------------------------------------------------
+# Project B: actually serve the model from inside the boundary.
+#
+# P1 proved an approved model could get in. This proves it can do useful work
+# there -- embeddings, on CPU, from the mirror, in a subnet with no route out.
+# No GPU, no NAT, no Interface endpoints: Lambda reaches S3 over the gateway
+# endpoint and nothing else.
+# ---------------------------------------------------------------------------
+
+data "archive_file" "serve" {
+  type        = "zip"
+  output_path = "${path.module}/.build/serve.zip"
+
+  # Lambda layers must place packages under python/ -- at the zip root the
+  # runtime simply will not find them.
+  source_dir = "${path.module}/lambda-serve/layer"
+}
+
+# The handler is small and changes often; the dependency bundle is 123 MB and
+# does not. Keeping them in one archive means a 40 MB upload for a one-line
+# edit, so the handler ships as its own file layered on top.
+data "archive_file" "serve_handler" {
+  type        = "zip"
+  source_file = "${path.module}/lambda-serve/handler.py"
+  output_path = "${path.module}/.build/serve-handler.zip"
+}
+
+resource "aws_lambda_layer_version" "deps" {
+  layer_name          = "${local.name}-onnx-deps"
+  filename            = data.archive_file.serve.output_path
+  source_code_hash    = data.archive_file.serve.output_base64sha256
+  compatible_runtimes = ["python3.13"]
+  description         = "onnxruntime, numpy, tokenizers. No HTTP client, no Hub client."
+}
+
+resource "aws_cloudwatch_log_group" "serve" {
+  name              = "/aws/lambda/${local.name}-embed"
+  retention_in_days = 1
+}
+
+resource "aws_lambda_function" "embed" {
+  function_name    = "${local.name}-embed"
+  role             = aws_iam_role.lambda.arn
+  handler          = "handler.lambda_handler"
+  runtime          = "python3.13"
+  filename         = data.archive_file.serve_handler.output_path
+  source_code_hash = data.archive_file.serve_handler.output_base64sha256
+  layers           = [aws_lambda_layer_version.deps.arn]
+  timeout          = 120
+  memory_size      = 2048 # >1769 MB gives a full vCPU; ONNX is CPU-bound
+
+  vpc_config {
+    subnet_ids         = [aws_subnet.private.id]
+    security_group_ids = [aws_security_group.lambda.id]
+  }
+
+  environment {
+    variables = {
+      MIRROR_BUCKET = var.bucket_name
+      MODEL_REPO    = var.model_repo
+      MODEL_FILE    = var.model_file
+    }
+  }
+
+  depends_on = [
+    aws_iam_role_policy_attachment.vpc,
+    aws_cloudwatch_log_group.serve,
+  ]
+}

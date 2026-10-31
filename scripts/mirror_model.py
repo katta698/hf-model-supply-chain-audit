@@ -118,15 +118,24 @@ def decide(f):
     return verdict, blocking, needs_human
 
 
-def mirror_patterns(findings, formats):
+def mirror_patterns(findings, formats, include=None):
     """Exactly which files to pull, as an allowlist.
 
     Anything not matched is simply absent from the mirror -- including weight
     formats that did not exist when this was written.
+
+    `--formats onnx` is a shorthand that pulls every ONNX file in the repo,
+    which for a typical sentence-transformers model is nine variants with
+    different optimisation and quantisation levels -- i.e. nine different
+    numerical behaviours. Picking a format is not a decision; picking an
+    artifact is. `include` takes explicit patterns for that.
     """
     allow = list(METADATA)
-    for fmt in formats:
-        allow += list(WEIGHTS[fmt])
+    if include:
+        allow += list(include)
+    else:
+        for fmt in formats:
+            allow += list(WEIGHTS[fmt])
     # A model that legitimately loads its own code needs that code mirrored
     # too; external-repo code is a BLOCK and never reaches here.
     if findings["remote_code"]:
@@ -216,6 +225,12 @@ def main():
         help="comma-separated weight formats to mirror: "
         + ",".join(WEIGHTS) + " (default: safetensors)",
     )
+    ap.add_argument(
+        "--include",
+        action="append",
+        metavar="GLOB",
+        help="mirror exactly these files instead of a whole format; repeatable",
+    )
     ap.add_argument("--dry-run", action="store_true", help="audit only, touch nothing")
     args = ap.parse_args()
 
@@ -260,13 +275,15 @@ def main():
     if unknown:
         print("\nunknown format(s): " + ", ".join(unknown))
         return 2
-    if "safetensors" in formats and not findings["safetensors_files"]:
+    if args.include:
+        formats = []
+    elif "safetensors" in formats and not findings["safetensors_files"]:
         print("\nno safetensors in this repo; nothing safe to mirror.")
         return 1
 
-    allow = mirror_patterns(findings, formats)
+    allow = mirror_patterns(findings, formats, args.include)
     print("\ndownloading revision " + findings["revision"][:12])
-    print("  formats   " + ", ".join(formats))
+    print("  formats   " + (", ".join(formats) if formats else "explicit --include"))
     print("  allowlist " + ", ".join(allow))
 
     local = snapshot_download(

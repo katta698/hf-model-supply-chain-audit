@@ -24,3 +24,9 @@ variable "subnet_cidr" {
   type    = string
   default = "10.80.1.0/24"
 }
+
+variable "model_file" {
+  description = "Exact weight file to serve, as mirrored"
+  type        = string
+  default     = "onnx/model_quint8_avx2.onnx"
+}

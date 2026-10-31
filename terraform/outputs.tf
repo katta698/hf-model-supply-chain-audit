@@ -22,3 +22,7 @@ output "routes" {
 output "invoke" {
   value = "aws lambda invoke --function-name ${aws_lambda_function.prover.function_name} --cli-binary-format raw-in-base64-out out.json && cat out.json"
 }
+
+output "embed_function" {
+  value = aws_lambda_function.embed.function_name
+}
